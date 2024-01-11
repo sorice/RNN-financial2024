@@ -10,12 +10,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-import itertools
-
 from logger import logger
 
 # Train the model
-class da_rnn:
+class NNTrainer:
+    """Trainer class with basic methods
+    """
     def __init__(self, file_data, logger, encoder_hidden_size = 64, decoder_hidden_size = 64, T = 10,
                  learning_rate = 0.01, batch_size = 128, parallel = True, debug = False):
         self.T = T
@@ -23,7 +23,7 @@ class da_rnn:
         self.logger = logger
         self.logger.info("Shape of data: %s.\nMissing in data: %s.", dat.shape, dat.isnull().sum().sum())
 
-        self.X = dat.loc[:, [x for x in dat.columns.tolist() if x != 'NDX']].as_matrix()
+        self.X = dat.loc[:, [x for x in dat.columns.tolist() if x != 'NDX']].to_numpy()
         self.y = np.array(dat.NDX)
         self.batch_size = batch_size
 
@@ -37,9 +37,9 @@ class da_rnn:
             self.encoder = nn.DataParallel(self.encoder)
             self.decoder = nn.DataParallel(self.decoder)
 
-        self.encoder_optimizer = optim.Adam(params = itertools.ifilter(lambda p: p.requires_grad, self.encoder.parameters()),
+        self.encoder_optimizer = optim.Adam(params = filter(lambda p: p.requires_grad, self.encoder.parameters()),
                                            lr = learning_rate)
-        self.decoder_optimizer = optim.Adam(params = itertools.ifilter(lambda p: p.requires_grad, self.decoder.parameters()),
+        self.decoder_optimizer = optim.Adam(params = filter(lambda p: p.requires_grad, self.decoder.parameters()),
                                            lr = learning_rate)
         # self.learning_rate = learning_rate
 
@@ -73,7 +73,8 @@ class da_rnn:
                     y_history[k, :] = self.y[batch_idx[k] : (batch_idx[k] + self.T - 1)]
 
                 loss = self.train_iteration(X, y_history, y_target)
-                self.iter_losses[i * iter_per_epoch + j / self.batch_size] = loss
+                self.iter_losses[i * iter_per_epoch + int(j / self.batch_size)] = loss
+                
                 #if (j / self.batch_size) % 50 == 0:
                 #    self.logger.info("Epoch %d, Batch %d: loss = %3.3f.", i, j / self.batch_size, loss)
                 j += self.batch_size
@@ -114,7 +115,7 @@ class da_rnn:
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
 
-        return loss.data[0]
+        return loss.data.item()
 
     def predict(self, on_train = False):
         if on_train:
